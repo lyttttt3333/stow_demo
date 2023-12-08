@@ -1,0 +1,34 @@
+import sys
+import os
+import numpy as np
+sys.path.append(os.getcwd())
+sys.path.append(os.getcwd()+"/env")
+from omni.isaac.kit import SimulationApp
+simulation_app=SimulationApp({"headless":False})
+from omni.isaac.core import World
+from omni.isaac.core.utils.types import ArticulationAction
+from env.Robot.Robot import Robot
+from env.config.config import Config
+
+
+
+class DeformEnv:
+    def __init__(self,config:Config):
+        self.world = World()
+        self.world.scene.add_default_ground_plane()
+        self.config=config
+        self.robot=Robot(self.world,self.config.robot_config)
+        self.world.reset()
+        for i in range(100):
+            self.world.step(render=True)
+    
+    
+    def pick_and_place_test(self):
+        self.robot.pick_and_place([np.array([0.5,0.3,0.1])],[np.array([0.5,-0.3,0.1])])
+        for i in range(500):
+            self.world.step(render=True)
+        
+if __name__=="__main__":
+    config=Config()
+    env=DeformEnv(config)
+    env.pick_and_place_test()
