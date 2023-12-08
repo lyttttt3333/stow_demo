@@ -13,8 +13,8 @@
             "env": {
                 "RESOURCE_NAME": "IsaacSim"
             },
-            "python": "/home/isaac/.local/share/ov/pkg/isaac_sim-2023.1.0/kit/python/bin/python3",
-            "envFile": "/home/isaac/.local/share/ov/pkg/isaac_sim-2023.1.0/.vscode/.standalone_examples.env",
+            "python": "/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/kit/python/bin/python3",
+            "envFile": "/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/.vscode/.standalone_examples.env",
             "preLaunchTask": "setup_python_env"
         },
         {
@@ -25,15 +25,15 @@
             "host": "localhost"
         },
         {
-            "name": "(Linux) isaac-sim",
+            "name": "(Linux) luhr-sim",
             "type": "cppdbg",
             "request": "launch",
-            "program": "/home/isaac/.local/share/ov/pkg/isaac_sim-2023.1.0/kit/kit",
-            "args": ["/home/isaac/.local/share/ov/pkg/isaac_sim-2023.1.0/apps/omni.isaac.sim.kit",
-                "--ext-folder", "/home/isaac/.local/share/ov/pkg/isaac_sim-2023.1.0/exts",
-                "--ext-folder", "/home/isaac/.local/share/ov/pkg/isaac_sim-2023.1.0/apps"],
+            "program": "/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/kit/kit",
+            "args": ["/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/apps/omni.luhr.sim.kit",
+                "--ext-folder", "/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/exts",
+                "--ext-folder", "/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/apps"],
             "stopAtEntry": false,
-            "cwd": "/home/isaac/.local/share/ov/pkg/isaac_sim-2023.1.0",
+            "cwd": "/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
