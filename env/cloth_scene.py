@@ -2,7 +2,7 @@
 from omni.isaac.kit import SimulationApp
 
 load = []
-load.append("/home/luhr/isaacgarment/TCLC_002/TCLC_002_obj.usd")
+load.append("/home/isaac/garmentIsaac/TCLC_002_obj.usd")
 
 
 simulation_app = SimulationApp({"headless": False})

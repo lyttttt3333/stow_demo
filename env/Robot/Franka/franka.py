@@ -9,10 +9,12 @@ from omni.isaac.core.utils.stage import add_reference_to_stage, get_stage_units
 from omni.isaac.franka.controllers.pick_place_controller import PickPlaceController
 from omni.isaac.franka.controllers.rmpflow_controller import RMPFlowController
 from omni.isaac.franka import KinematicsSolver
+from omni.isaac.core.utils.types import ArticulationAction
+import torch
 
 
-class WrapFranka(Franka):
-    def __init__(self,world:World,Position=np.ndarray,prim_path:str=None,robot_name:str=None,):
+class WrapFranka:
+    def __init__(self,world:World,Position=torch.tensor,prim_path:str=None,robot_name:str=None,):
         self.world=world
         if prim_path is None:
             self._franka_prim_path = find_unique_string_name(
@@ -30,13 +32,12 @@ class WrapFranka(Franka):
 
         self.init_position=Position
         self.world.scene.add(Franka(prim_path=self._franka_prim_path, name=self._franka_robot_name,position=Position))
-        self.world.reset()
         self._robot:Franka=self.world.scene.get_object(self._franka_robot_name)
         self._articulation_controller=self._robot.get_articulation_controller()
-        self._controller=RMPFlowController(name="rmpflow_controller",robot_articulation=self._robot)
-        self._kinematic_solover=KinematicsSolver(self._robot)
+        # self._controller=RMPFlowController(name="rmpflow_controller",robot_articulation=self._robot)
+        # self._kinematic_solover=KinematicsSolver(self._robot)
         self._pick_place_controller=PickPlaceController(name="pick_place_controller",robot_articulation=self._robot,gripper=self._robot.gripper)
-        self._controller.reset()
+        # self._controller.reset()
         self._pick_place_controller.reset()
     def get_cur_ee_pos(self):
         return self._kinematic_solover.compute_end_effector_pose()
@@ -53,9 +54,11 @@ class WrapFranka(Franka):
                 next_target=target_pos
             else:
                 next_target=cur_ee_pos+dirction*speed
-    
+
+
     def pick_and_place(self,pick,place):
         self._pick_place_controller.reset()
+        self._robot.gripper.open()
         while 1:
             self.world.step(render=True)
             actions=self._pick_place_controller.forward(
