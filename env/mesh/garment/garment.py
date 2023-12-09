@@ -14,6 +14,9 @@ from omni.isaac.core.utils.semantics import add_update_semantics, get_semantics
 from omni.isaac.core.prims import XFormPrim, ClothPrim
 from env.utils.physics_utils import set_collision, set_mass
 
+# todo
+# write randomlize function
+
 class Garment:
     def __init__(self,world:World,usd_path:str):
         self.world=world

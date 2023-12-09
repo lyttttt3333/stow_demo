@@ -1,6 +1,9 @@
 
 import numpy as np
 import torch
+# todo 
+# add new hyperparameters
+# domain randomization
 
 
 class Config:

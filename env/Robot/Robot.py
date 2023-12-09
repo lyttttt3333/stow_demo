@@ -2,6 +2,10 @@ from omni.isaac.core.utils.types import ArticulationAction
 from env.config.config import RobotConfig
 from env.Robot.Franka.franka import WrapFranka
 from omni.isaac.core import World
+# write pick and place primitive
+# write movep function
+# write fling function
+# write hang function
 
 
 class Robot:
