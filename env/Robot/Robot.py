@@ -27,3 +27,9 @@ class Robot:
         for i in range(self.robot_config.num):
             if pick[i] is not None and place[i] is not None:
                 self._robot[i].pick_and_place(pick[i],place[i])
+
+    def movep(self,end_pos):
+        assert len(end_pos)==self.robot_config.num, "pick position num not equal to robot num"
+        for i in range(self.robot_config.num):
+            if end_pos[i] is not None:
+                self._robot[i].movep(end_pos[i],speed=0.1)

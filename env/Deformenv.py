@@ -15,7 +15,7 @@ from env.mesh.garment.garment import Garment
 
 class DeformEnv:
     def __init__(self,config:Config):
-        self.world = World(stage_units_in_meters=1.0,backend="torch",device="cuda:0")
+        self.world = World(backend="torch",device="cuda:0")
         self.world.scene.add_default_ground_plane()
         self.config=config
         self.robot=Robot(self.world,self.config.robot_config)
@@ -27,8 +27,10 @@ class DeformEnv:
 
     
     def pick_and_place_test(self):
-        # self.robot.pick_and_place([np.array([0.5,0.4,0.2])],[np.array([0.5,-0.3,0.15])])
-        self.robot.pick_and_place([np.array([0.3,0.3,0.15])],[np.array([0.5,-0.3,0.15])])
+        # self.robot.pick_and_place([np.array([0.5,0.4,0.1])],[np.array([0.5,-0.3,0.15])])
+        # self.robot.pick_and_place([np.array([0.3,0.3,0.1])],[np.array([0.5,-0.3,0.1])])
+        self.robot.movep([np.array([0.3,0.3,0.2])])
+        print("out")
         for i in range(500):
             self.world.step(render=True)
         

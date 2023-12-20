@@ -35,6 +35,14 @@ class Garment:
         self.particle_system = ParticleSystem(
             prim_path=self.particle_system_path,
             simulation_owner=self.world.get_physics_context().prim_path,
+            particle_contact_offset=0.01,
+            contact_offset=0.01,
+            rest_offset=0.01,
+            solid_rest_offset=0.008,
+            fluid_rest_offset=0,
+            enable_ccd=True,
+            global_self_collision_enabled=True,
+            non_particle_collision_enabled=True,
         )
 
         add_reference_to_stage(usd_path=self.usd_path,prim_path=self.garment_prim_path)
