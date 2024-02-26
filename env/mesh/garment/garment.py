@@ -13,6 +13,7 @@ from omni.isaac.core.utils.stage import add_reference_to_stage, is_stage_loading
 from omni.isaac.core.utils.semantics import add_update_semantics, get_semantics
 from omni.isaac.core.prims import XFormPrim, ClothPrim
 from env.utils.physics_utils import set_collision, set_mass
+from omni.physx.scripts import physicsUtils, deformableUtils
 
 # todo
 # write randomlize function
@@ -29,25 +30,22 @@ class Garment:
         self.particle_material_path=find_unique_string_name("/World/Garment/particleMaterial",is_unique_fn=lambda x: not is_prim_path_valid(x))
 
         self.particle_material=ParticleMaterial(prim_path=self.particle_material_path, friction=0.2)
-        radius = 0.5 * (0.6 / 5.0)
-        restOffset = radius
-        contactOffset = restOffset * 1.5
+
         self.particle_system = ParticleSystem(
             prim_path=self.particle_system_path,
             simulation_owner=self.world.get_physics_context().prim_path,
-            particle_contact_offset=0.01,
-            contact_offset=0.01,
-            rest_offset=0.01,
-            solid_rest_offset=0.008,
-            fluid_rest_offset=0,
+            particle_contact_offset=0.02,
+            contact_offset=0.02,
+            rest_offset=0.012,
             enable_ccd=True,
             global_self_collision_enabled=True,
             non_particle_collision_enabled=True,
+            solver_position_iteration_count=32
         )
 
         add_reference_to_stage(usd_path=self.usd_path,prim_path=self.garment_prim_path)
+        
         self.garment_mesh_prim_path=self.garment_prim_path+"/mesh"
-
         self.garment=XFormPrim(
             prim_path=self.garment_prim_path,
             name=self.garment_name,
@@ -64,12 +62,6 @@ class Garment:
             shear_stiffness=100.0,
             spring_damping=0.2,
         )
-        # particle_mass = 0.02
-        # num_verts = len(self.garment_mesh.mesh.GetPointsAttr().Get())
-        # mass = particle_mass * num_verts
-        # massApi = UsdPhysics.MassAPI.Apply(self.garment_mesh.mesh.GetPrim())
-        # UsdPhysics.CollisionAPI.Apply(self.garment_mesh.mesh.GetPrim())
-        # massApi.GetMassAttr().Set(mass)
         self.world.scene.add(self.garment_mesh)
         
         

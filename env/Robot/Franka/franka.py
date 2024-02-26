@@ -36,14 +36,14 @@ class WrapFranka:
         self.world.scene.add(Franka(prim_path=self._franka_prim_path, name=self._franka_robot_name,position=Position))
         self._robot:Franka=self.world.scene.get_object(self._franka_robot_name)
         self._articulation_controller=self._robot.get_articulation_controller()
-        self._controller=RMPFlowController(name="rmpflow_controller",robot_articulation=self._robot,physics_dt=1/120.0)
+        self._controller=RMPFlowController(name="rmpflow_controller",robot_articulation=self._robot,physics_dt=1/240.0)
         self._kinematic_solover=KinematicsSolver(self._robot)
         self._pick_place_controller=PickPlaceController(name="pick_place_controller",robot_articulation=self._robot,gripper=self._robot.gripper)
         self._controller.reset()
         self._pick_place_controller.reset()
     def get_cur_ee_pos(self):
-        return self._kinematic_solover.compute_end_effector_pose()
-    
+        ee_pos, R = self._controller.get_motion_policy().get_end_effector_as_prim().get_world_pose()
+        return ee_pos, R
 
 
     def pick_and_place(self,pick,place):
@@ -60,6 +60,12 @@ class WrapFranka:
             if self._pick_place_controller.is_done():
                 break
             self._articulation_controller.apply_action(actions)
+    
+    def open(self):
+        self._robot.gripper.open()
+    
+    def close(self):
+        self._robot.gripper.close()
 
     @staticmethod
     def interpolate(start_loc, end_loc, speed):
@@ -67,6 +73,8 @@ class WrapFranka:
         end_loc = np.array(end_loc)
         dist = np.linalg.norm(end_loc - start_loc)
         chunks = dist // speed
+        if chunks==0:
+            chunks=1
         return start_loc + np.outer(np.arange(chunks+1,dtype=float), (end_loc - start_loc) / chunks)
     
     def position_reached(self, target,thres=0.01):
@@ -89,12 +97,16 @@ class WrapFranka:
         if angle_diff < 0.1:
             return True
         
-    def movep(self,end_loc,speed):
+    def movep(self,end_loc,speed,max_step=200):
         self.world.step(render=True)
         start_loc=self.get_cur_ee_pos()[0]
         path=self.interpolate(start_loc,end_loc,speed)
         for i in range(len(path)):
+            step_num=0
             while not self.position_reached(path[i]):
+                step_num+=1
+                if step_num>max_step:
+                    break
                 self.world.step(render=True)
                 end_effector_orientation = euler_angles_to_quat(np.array([0, np.pi, 0]))
                 target_joint_positions = self._controller.forward(

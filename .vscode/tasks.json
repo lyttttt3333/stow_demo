@@ -7,7 +7,7 @@
             "label": "setup_python_env",
             "type": "shell",
             "linux": {
-                "command": "export CARB_APP_PATH=/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/kit && export ISAAC_PATH=/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1&& export EXP_PATH=/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/apps && source /home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/setup_python_env.sh && printenv >/home/luhr/.local/share/ov/pkg/isaac_sim-2023.1.0-hotfix.1/.vscode/.standalone_examples.env"
+                "command": "export CARB_APP_PATH=/home/isaac/.local/share/ov/pkg/isaac_sim-2022.2.1/kit && export ISAAC_PATH=/home/isaac/.local/share/ov/pkg/isaac_sim-2022.2.1&& export EXP_PATH=/home/isaac/.local/share/ov/pkg/isaac_sim-2022.2.1/apps && source /home/isaac/.local/share/ov/pkg/isaac_sim-2022.2.1/setup_python_env.sh && printenv >/home/isaac/.local/share/ov/pkg/isaac_sim-2022.2.1/.vscode/.standalone_examples.env"
             }
         }
     ]

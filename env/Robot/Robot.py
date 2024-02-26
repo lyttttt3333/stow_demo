@@ -17,6 +17,8 @@ class Robot:
     
     
     def load_robot(self):
+        if len(self.robot_config.position)!=self.robot_config.num:
+            assert False, "robot position num not equal to robot num"
         if self.robot_config.type=="franka":
             for i in range(self.robot_config.num):
                 self._robot.append(WrapFranka(self.world,self.robot_config.position[i]))
@@ -32,4 +34,11 @@ class Robot:
         assert len(end_pos)==self.robot_config.num, "pick position num not equal to robot num"
         for i in range(self.robot_config.num):
             if end_pos[i] is not None:
-                self._robot[i].movep(end_pos[i],speed=0.1)
+                self._robot[i].movep(end_pos[i],speed=2)
+    def open(self):
+        for i in range(self.robot_config.num):
+            self._robot[i].open()
+    
+    def close(self):
+        for i in range(self.robot_config.num):
+            self._robot[i].close()
