@@ -576,5 +576,5 @@ path=[
 add_path=[]
 with open("add_path.txt", "w+") as file:
     for path in path:
-        file.writelines('"/home/isaac/.local/share/ov/pkg/isaac_sim-2022.2.1/'+path+'",\n')
+        file.writelines('"/home/sim/.local/share/ov/pkg/isaac_sim-2022.2.1/'+path+'",\n')
     
