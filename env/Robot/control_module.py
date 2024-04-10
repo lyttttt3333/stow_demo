@@ -2,12 +2,12 @@ import sys
 import os
 import numpy as np
 import torch
-from PATH import *
+from env.config.PATH import *
 from omni.isaac.kit import SimulationApp
 from omni.isaac.core import World, SimulationContext, PhysicsContext
 from omni.isaac.core.utils.types import ArticulationAction
 from env.Robot.Robot import Robot
-from env.config.config import Config
+from env.config.config import *
 from env.utils.isaac_utils import add_workspace
 from env.mesh.garment.garment import Garment, ParticleSamplerDemo,Rigid, Rigid2, ParticleCloth, AttachmentBlock, WayPoint, ParticleCloth
 from pxr import UsdGeom, UsdLux, Sdf, Gf, Vt, Usd, UsdPhysics, PhysxSchema
@@ -45,6 +45,41 @@ class trajectory_transformer():
         )
         position=torch.mm(position.unsqueeze(0),R.transpose(1,0))
         return position.squeeze(0)
+    
+def keep_action_consistency(input_seq,robot_num):
+    if not isinstance(input_seq[0],list):
+        raise ValueError("the first ep cannot be interval")
+    ep_num=len(input_seq)
+    for i in range(1,ep_num):
+        ep=input_seq[i]
+        if isinstance(ep,EpisodeConfig):
+            assert ep.contain_task == False
+            length=ep.length
+            ep_list=[]
+            last_ep=input_seq[i-1]
+            for j in range(robot_num):
+                block_position=last_ep[j].task_params[-1][0]
+                ep=EpisodeConfig(contain_task=True,length=length)
+                ep.add_task(
+                    [
+                        [block_position,None],
+                        [block_position,length],
+                    ]
+                )
+                ep_list.append(ep)
+            input_seq[i]=ep_list
+        elif isinstance(ep,list):
+            last_ep=input_seq[i-1]
+            current_ep=input_seq[i]
+            for j in range(robot_num):
+                last_block_position=last_ep[j].task_params[-1][0]
+                current_block_position=current_ep[j].task_params[0][0]
+                error=last_block_position-current_block_position
+                if not (error == 0).all().item():
+                    raise ValueError(f"for robot {j} in ep {i} and ep {i-1}, the end and start must be consistent")
+        else:
+            raise TypeError
+    return input_seq
 
 
 class EpisodeConfig():
@@ -59,110 +94,60 @@ class EpisodeConfig():
     def add_task(self,task_params:list=None):
         self.task_params=task_params if self.contain_task is True else None
 
-class DeformEnvOld:
-    def __init__(self,robot_initial_position,robot_num,load_scene=False,load_waypoint=False,real_robot=False,block_visual=True):
-        self.config=Config()
-    
+
+class DynamicsModule:
+    def __init__(self, world, robot_initial_position,robot_num,load_waypoint=False,real_robot=False,block_visual=True,load_scene=False):
         self.unit=0.1
-        self.world = World(stage_units_in_meters=self.unit,backend="torch",device="cuda:0")
+        self.sim_dt=1/60
+        self.default_length=30
+        self.world = world
         self.stage=self.world.stage
         self.robot_num=robot_num
         self.load_scene=load_scene
+        self.config=Config()
         self.real_robot=real_robot
         self.robot=Robot(self.world,self.config.robot_config,robot_initial_position,robot_num)
-        Scene=self.world.get_physics_context() 
-        self.scene=Scene._physics_scene
-        self.default_length=36
-        self.scene.CreateGravityDirectionAttr().Set(Gf.Vec3f(0.0, 0.0, -1.0))
-        self.scene.CreateGravityMagnitudeAttr().Set(0.98)
-
-        if load_scene:        
-            self.load_room(LIVING_ROOM)
-        else:
-            self.rigid=Rigid("/World/Rigid",BED)
-
-        if load_waypoint:
-            self.way_point=WayPoint(root_path="/Way_point", section_num=3)
 
         self.trans=trajectory_transformer(self.config.robot_config)
 
-        garment_params={
-            "path":CLOTH_TO_HANG,
-            "position":np.array([-0.65481,-1.27712,0.54132]),
-            "orientation":np.array([0.47366,-0.32437,-0.46264,-0.67557]),
-            "scale":np.array([0.0075, 0.0075, 0.0075]),
-        }
-
-        self.garment=Garment(self.stage,self.scene,garment_params)
-        self.world.scene.add(self.garment.garment_mesh)
-        self.info=self.garment.garment_mesh._cloth_prim_view 
-
-        self.create_collsion_group()
-        self.set_camera()
         
+        self.attach=AttachmentBlock(self.world, self.stage,"/World/attach","/World/Garment/garment/mesh",robot_initial_position,self.robot_num)
+        self.move_block_list=self.attach.create(block_visual)
+        self.register_default_object()
 
-        self.device="cuda:0"
-        self.sim_dt=1/60
-        
-        self.attach=AttachmentBlock(self.world, self.stage,"/World/attach","/World/Garment/garment/mesh",robot_initial_position_list,self.robot_num)
-        self.attach.create(block_visual)
-        move_block_list=self.attach.block_prim_list
-        self.move_block_controller_list=[move_block._rigid_prim_view for move_block in move_block_list]
-        for move_block in self.move_block_controller_list:
-            move_block.disable_gravities()
-
+    def register_default_object(self):
         self.objects=[]
-        init_params={
-            "q":garment_params["orientation"],
-            "r":garment_params["position"],
-            "scale":1/garment_params["scale"][0],
-        }
-        object1={
-            "controller":self.garment.garment_mesh._cloth_prim_view,
-            "params":init_params,
-            "state":None,
-        }
-        robot1={
-            "controller":self.robot._robot[0]._robot,
-            "params":None,
-            "state":None,
-        }
-        self.objects.append(object1)
-        self.objects.append(robot1)
         for i in range(self.robot_num):
             attachment={
-                "controller":move_block_list[i],
+                "controller":self.move_block_list[i],
                 "params":None,
                 "state":None,
+                "type":"block",
+            }
+            robot={
+                "controller":self.robot._robot[i]._robot,
+                "params":None,
+                "state":None,
+                "type":"robot",
             }
             self.objects.append(attachment)
+            self.objects.append(robot)
 
-    def load_room(self,env_path):
-        from omni.isaac.core.prims import XFormPrim, ClothPrim, RigidPrim, GeometryPrim, ParticleSystem
-        from omni.isaac.core.utils.string import find_unique_string_name
-        from omni.isaac.core.utils.prims import is_prim_path_valid
-        self.room_prim_path=find_unique_string_name("/Room",is_unique_fn=lambda x: not is_prim_path_valid(x))
-        add_reference_to_stage(env_path,self.room_prim_path)
-        self.room_prim=XFormPrim(self.room_prim_path,name="Room",scale=[0.8,0.8,0.8],position=[0.7,0.5,0],orientation=euler_angles_to_quat([0,0,-np.pi]))
-
-    def set_camera(self):
-        rotation=np.array([0.37207,0.20084,0.43454,0.79524])
-        self.camera = Camera(
-            prim_path="/Camera",
-            position=np.array([9.0, 7.0, 7.5]),
-            frequency=20,
-            resolution=(512, 512),
-            orientation=rotation
-        )
-        self.camera.initialize()
-
-    def test_camera(self):
-        self.world.reset()
-        for i in range(100):
-            self.world.step(render=True)
-            photo=self.camera.get_rgb()
-            print(photo)
-
+    def register_env_object(self,type_name,init_params=None,controller=None):
+        if type_name == "garment":
+            assert init_params is not None, "init_params must be given"
+            assert controller is not None, "con must be given"
+            garment={
+                "controller":controller,
+                "params":init_params,
+                "state":None,
+                "type":"garment",
+            }
+            self.objects.append(garment)
+        elif type_name == "rigid":
+            raise ValueError("No method about rigid currently")
+        else:
+            raise ValueError("Type must be in rigid or garment")
 
     def create_collsion_group(self):
         robot_group_list=[]
@@ -247,32 +232,33 @@ class DeformEnvOld:
     def log_final_scene(self):
         for i in range(len(self.objects)):
             object=self.objects[i]
-            if i == 0:
+            object_type=object["type"]
+            if object_type == "garment":
                 object["state"]=object["controller"].get_world_positions()
-                print(object["state"].shape)
-            if i == 1:     
+            if object_type == "robot":     
                 object["state"]=object["controller"].get_joint_positions()
-            if i == 2:
-                position,_=object["controller"].get_world_pose()
+            if object_type == "block":
+                position,_=object["controller"].get_world_poses()
                 object["state"]=position
 
     def reload_final_scene(self,phase1:bool,phase2:bool):
         for i in range(len(self.objects)):
             object=self.objects[i]
-            if i == 0 and phase1:
+            object_type=object["type"]
+            if object_type == "garment" and phase1:
                 params=object["params"]
                 q=params["q"]
                 r=params["r"]
                 scale=params["scale"]
                 next_state=self.trans_points(q,r,scale,object["state"])
                 object["controller"].set_world_positions(next_state.unsqueeze(0),force_set=True)
-            if i == 1 and phase2:
+            if object_type == "robot" and phase2:
                 next_state=object["state"]
                 if next_state is not None:
                     object["controller"].set_joint_positions(next_state)
-            if i == 2:
+            if object_type == "block":
                 next_state=object["state"]
-                object["controller"].set_world_pose(next_state)
+                object["controller"].set_world_poses(next_state)
 
     def trans_points(self,q,r,scale,points):
         q0=q[0]
@@ -416,26 +402,25 @@ class DeformEnvOld:
             next_position=next_position_mat[i*3:i*3+3]
             if self.real_robot:
                 gripper_position_next=self.trans.compute(next_position,i)
-                #gripper_position_next=next_position
                 self.robot.move_to_next_position(position=gripper_position_next,orientation=None,index=i)
                 gripper_position,gripper_orientation=self.robot.get_current_position(index=i)
                 a=self.Rotation(gripper_orientation,grasp_offset)
                 print(gripper_position,gripper_orientation)
                 print(a)
                 block_position=gripper_position.cpu()+a
-                current_position,_=self.move_block_controller_list[i].get_world_poses()
+                current_position,_=self.move_block_list[i].get_world_poses()
                 current_position=current_position.cpu()
                 target_vel=(block_position-current_position)/self.sim_dt
                 orientation_ped=torch.zeros_like(target_vel)
                 cmd=torch.cat([target_vel,orientation_ped],dim=-1)
-                self.move_block_controller_list[i].set_velocities(cmd)
+                self.move_block_list[i].set_velocities(cmd)
             else:
-                current_position,_=self.move_block_controller_list[i].get_world_poses()
+                current_position,_=self.move_block_list[i].get_world_poses()
                 current_position=current_position.cpu()
                 target_vel=(next_position-current_position)/self.sim_dt
                 orientation_ped=torch.zeros_like(target_vel)
                 cmd=torch.cat([target_vel,orientation_ped],dim=-1)
-                self.move_block_controller_list[i].set_velocities(cmd)
+                self.move_block_list[i].set_velocities(cmd)
         self.world.step(render=True)
         
     def pause(self):
@@ -445,16 +430,11 @@ class DeformEnvOld:
         print("######################################")
         print("###### align render and physics ######")
         print("######################################")
-        
 
     def start(self):
         self.world.reset()
         self.robot.initialize()
         self.reload_final_scene(phase1=False,phase2=True)
 
-
-    def end(self):
-        for i in range(10000):
-            self.world.step(render=True)
 
 

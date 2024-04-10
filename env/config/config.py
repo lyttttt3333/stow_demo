@@ -1,7 +1,7 @@
 
 import numpy as np
 import torch
-from PATH import *
+from env.config.PATH import *
 # todo 
 # add new hyperparameters
 
@@ -24,7 +24,7 @@ class RobotConfig:
     def __init__(self):
         self.type="franka"
         self.num=1
-        self.position=torch.tensor([[-0.4,-1.7,0.3],[1.0,0.,0.]])
+        self.position=torch.tensor([[0.06037,-1.49523,0.63282]])
         self.orientation=[None,None]
     
 class EpisodeConfig():
@@ -39,15 +39,12 @@ class EpisodeConfig():
     def add_task(self,task_params:list=None):
         self.task_params=task_params if self.contain_task is True else None
 
-robot_initial_position=torch.tensor([0.06037,-1.49523,0.63282])
-robot_initial_position_list=[robot_initial_position]
-robot_num=1
 
 ep_sequence=[]
 ep00=EpisodeConfig(contain_task=True,length=200)
 ep00.add_task(
     [
-        [robot_initial_position,None],
+        [torch.tensor([0.06037,-1.49523,0.63282]),None],
         [torch.tensor([0.39933,-1.51923,0.4523]),3],     
     ]
 )
@@ -76,3 +73,6 @@ GarmentConfig={
             "orientation":np.array([0.47366,-0.32437,-0.46264,-0.67557]),
             "scale":np.array([0.0075, 0.0075, 0.0075]),
         }
+
+import torch
+grasp_offset=torch.tensor([0.,0.,0.045])
