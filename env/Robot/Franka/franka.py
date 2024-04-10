@@ -2,7 +2,7 @@ from env.utils.transforms import quat_diff_rad
 import numpy as np
 from omni.isaac.core.utils.types import ArticulationAction
 from omni.isaac.franka import Franka
-from omni.isaac.core.utils.prims import is_prim_path_valid
+from omni.isaac.core.utils.prims import is_prim_path_valid, get_prim_at_path
 from omni.isaac.core.utils.string import find_unique_string_name
 from omni.isaac.core import World
 from omni.isaac.core.utils.nucleus import get_assets_root_path
@@ -13,10 +13,12 @@ from omni.isaac.franka import KinematicsSolver
 from omni.isaac.core.utils.types import ArticulationAction
 from omni.isaac.core.utils.rotations import euler_angles_to_quat
 import torch
+from pxr import UsdGeom, UsdLux, Sdf, Gf, Vt, Usd, UsdPhysics, PhysxSchema
+from omni.isaac.core.prims import XFormPrim, ClothPrim, RigidPrim, GeometryPrim, ParticleSystem
 
 
 class WrapFranka:
-    def __init__(self,world:World,Position=torch.tensor,prim_path:str=None,robot_name:str=None,):
+    def __init__(self,world:World,Position=torch.tensor,orientation=None,prim_path:str=None,robot_name:str=None,):
         self.world=world
         if prim_path is None:
             self._franka_prim_path = find_unique_string_name(
@@ -33,33 +35,62 @@ class WrapFranka:
             self._franka_robot_name=robot_name
 
         self.init_position=Position
-        self.world.scene.add(Franka(prim_path=self._franka_prim_path, name=self._franka_robot_name,position=Position))
-        self._robot:Franka=self.world.scene.get_object(self._franka_robot_name)
+        self._robot=Franka(prim_path=self._franka_prim_path, name=self._franka_robot_name,position=Position,orientation=orientation)
+        self.world.scene.add(self._robot)
         self._articulation_controller=self._robot.get_articulation_controller()
         self._controller=RMPFlowController(name="rmpflow_controller",robot_articulation=self._robot,physics_dt=1/240.0)
         self._kinematic_solover=KinematicsSolver(self._robot)
         self._pick_place_controller=PickPlaceController(name="pick_place_controller",robot_articulation=self._robot,gripper=self._robot.gripper)
+
+
+
+    def initialize(self):
         self._controller.reset()
-        self._pick_place_controller.reset()
+        #self._robot.initialize()
+
+
     def get_cur_ee_pos(self):
         ee_pos, R = self._controller.get_motion_policy().get_end_effector_as_prim().get_world_pose()
         return ee_pos, R
 
-
-    def pick_and_place(self,pick,place):
-        self._pick_place_controller.reset()
-        self._robot.gripper.open()
-        while 1:
-            self.world.step(render=True)
-            actions=self._pick_place_controller.forward(
-                picking_position=pick,
-                placing_position=place,
-                current_joint_positions=self._robot.get_joint_positions(),
-                end_effector_offset=np.array([0,0.005,0]),
+    def get_current_position(self):
+        position,orientation=self._robot.gripper.get_world_pose()
+        return position,orientation
+    
+    def move(self,position,orientation=None):
+        #position,orientation=self.input_filter(position,orientation)
+        position=position.cpu().numpy()/0.1
+        orientation=np.array([0.,1.,0.,0.])
+        #orientation=np.array([0.,0.70711,-0.70711,0.])
+        actions = self._controller.forward(
+            target_end_effector_position=position,
+            #target_end_effector_orientation=orientation
             )
-            if self._pick_place_controller.is_done():
-                break
-            self._articulation_controller.apply_action(actions)
+        #self._robot.set_joint_positions(joint)
+
+        action_info=self._articulation_controller.apply_action(actions,True)
+        #self._articulation_controller.apply_discrete_action(action_info)
+
+    def input_filter(self,position,orientation):
+        if orientation is None:
+            pass
+        if isinstance(position,torch.tensor):
+            pass
+
+        
+
+
+    def change_rigid_state(self,enable:bool):
+        path="/World/Franka/panda_rightfinger/geometry/panda_rightfinger"
+        print(path)
+        prim=get_prim_at_path(path)
+        #UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Set(enable)
+        if False:
+            if enable:
+                self._robot.end_effector.enable_rigid_body_physics()
+            else:
+                self._robot.end_effector.disable_rigid_body_physics()
+
     
     def open(self):
         self._robot.gripper.open()
