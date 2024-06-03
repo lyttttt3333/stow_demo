@@ -54,17 +54,19 @@ class WrapFranka:
         return ee_pos, R
 
     def get_current_position(self):
-        position,orientation=self._robot.gripper.get_world_pose()
-        return position,orientation
+        position_left,orientation=self._robot.gripper.get_world_pose()
+        position_right,_=self._robot._gripper_right.get_world_pose()
+        return (position_left+position_right)/2,orientation
     
     def move(self,position,orientation=None):
         #position,orientation=self.input_filter(position,orientation)
+        #orientation=np.array([0.,1.,0.,0.])
+        
         position=position.cpu().numpy()/0.1
-        orientation=np.array([0.,1.,0.,0.])
-        #orientation=np.array([0.,0.70711,-0.70711,0.])
+        position=position.reshape(-1)
         actions = self._controller.forward(
             target_end_effector_position=position,
-            #target_end_effector_orientation=orientation
+            target_end_effector_orientation=orientation
             )
         #self._robot.set_joint_positions(joint)
 

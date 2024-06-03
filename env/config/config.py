@@ -2,9 +2,12 @@
 import numpy as np
 import torch
 from env.config.PATH import *
+from omni.isaac.core.utils.rotations import euler_angles_to_quat
 # todo 
 # add new hyperparameters
 
+
+place_offset=torch.tensor([[-0.65,0.,0.5]])
 
 class Config:
     def __init__(self,kwargs:dict=None) -> None:
@@ -24,8 +27,8 @@ class RobotConfig:
     def __init__(self):
         self.type="franka"
         self.num=1
-        self.position=torch.tensor([[0.06037,-1.49523,0.63282]])
-        self.orientation=[None,None]
+        self.position=place_offset
+        self.orientation=[None]
     
 class EpisodeConfig():
     def __init__(self,length:int=100,contain_task:bool=False,pick:bool=False,place:bool=False):
@@ -41,38 +44,93 @@ class EpisodeConfig():
 
 
 ep_sequence=[]
-ep00=EpisodeConfig(contain_task=True,length=200)
-ep00.add_task(
-    [
-        [torch.tensor([0.06037,-1.49523,0.63282]),None],
-        [torch.tensor([0.39933,-1.51923,0.4523]),3],     
+
+ep00=[
+        [torch.tensor([-0.44393,-0.3,1.55823]),None,None],  
+        [torch.tensor([-0.34393,-0.0,1.55823]),None,None],  
+        [torch.tensor([-0.34393,-0.0,1.4054]),None,None], 
     ]
-)
-ep001=EpisodeConfig(contain_task=True,length=200,pick=True,place=False)
-ep001.add_task(
-    [
-        [torch.tensor([0.39933,-1.51923,0.4523]),None],     
-        [torch.tensor([0.19933,-1.51923,0.9523]),3],    
+
+ep11=[
+        [None,torch.tensor([-0.48333,0.82575,1.79849]),torch.tensor([-0.78477,0.48995,1.79849]),],
+        [None,torch.tensor([0.65775,0.2003,1.66116]),torch.tensor([-0.80282,0.3686,1.65262]),],  
+        [None,torch.tensor([0.35775,0.2003,0.87173]),torch.tensor([-0.74086,-0.58022,1.47973]),], 
+        [None,torch.tensor([0.35775,0.2003,0.87173]),torch.tensor([-0.31494,-0.28949,1.42068]),], 
+        [None,torch.tensor([0.35775,0.2003,0.87173]),torch.tensor([-0.00227,-0.42359,1.36109]),], 
+        [None,torch.tensor([0.35775,0.2003,0.87173]),torch.tensor([-0.06306,-0.17359,1.02131]),], 
+        #[None,torch.tensor([0.00775,0.2003,1.07173]),torch.tensor([-0.74086,-0.58022,1.47973]),], 
     ]
-)
-ep10=EpisodeConfig(contain_task=True,length=200,pick=True,place=False)
-ep10.add_task(
-    [
-        [torch.tensor([0.19933,-1.51923,0.9523]),None],
-        [torch.tensor([0.01957,-2.36048,1.24274]),3],
+
+ep12=[
+        [None,torch.tensor([-0.18266,-0.27408,1.42152]),None,],
+        [None,torch.tensor([-0.47344,-0.16961,1.42152]),None],  
+        [None,torch.tensor([-0.50344,0.27617,1.42152]),None], 
+        [None,torch.tensor([-0.63344,0.42617,1.42152]),None], 
+        [None,torch.tensor([-0.05975,0.00617,1.0145]),None], 
     ]
-)
-ep_sequence.append([ep00])
-ep_sequence.append([ep001])
-ep_sequence.append([ep10])
+
+rest_position=[None,None,torch.tensor([-0.64065,-0.86618,1.6235])]
+rest_position2=[torch.tensor([-0.34393,-0.0,1.6054]),None,None,]
 
 
-GarmentConfig={
-            "path":CLOTH_TO_HANG,
-            "position":np.array([-0.65481,-1.27712,0.54132]),
-            "orientation":np.array([0.47366,-0.32437,-0.46264,-0.67557]),
-            "scale":np.array([0.0075, 0.0075, 0.0075]),
+RigidConfig={
+            "path":BED,
+            "position":np.array([-0.61832, 0.79868, 0.82689]),
+            "orientation":euler_angles_to_quat(np.array([0.,0.,np.pi/2])),
+            "scale":np.array([0.014,0.006,0.004]),
         }
 
 import torch
 grasp_offset=torch.tensor([0.,0.,0.045])
+
+
+book_list=[]
+
+BOOKConfig={
+            "path":BOOK1,
+            "position":np.array([-0.0182, 0.22416, 0.96991]),
+            "orientation":np.array([-67.396/180*np.pi,0.,0.]),
+            "scale":np.array([1.,0.8,2])*0.01,
+        }
+book_list.append(BOOKConfig)
+
+BOOKConfig={
+            "path":BOOK2,
+            "position":np.array([-0.0182, 0.21429, 0.89063]),
+            "orientation":np.array([-67.62/180*np.pi,0.,0.]),
+            "scale":np.array([1.,0.8,3.])*0.01,
+        }
+book_list.append(BOOKConfig)
+
+BOOKConfig={
+            "path":BOOK3,
+            "position":np.array([-0.0182, 0.29397, 0.95972]),
+            "orientation":np.array([-60.668/180*np.pi,0.,0.]),
+            "scale":np.array([1.,1.,1.])*0.01,
+        }
+book_list.append(BOOKConfig)
+
+BOOKConfig={
+            "path":BOOK4,
+            "position":np.array([-0.0182, 0.365, 0.95599]),
+            "orientation":np.array([-46.099/180*np.pi,0.,0.]),
+            "scale":np.array([1.,1.,1.])*0.01,
+        }
+book_list.append(BOOKConfig)
+
+
+config_list=[]
+RigidConfig={
+            "path":DESK,
+            "position":np.array([0., 0.03477, 0.]),
+            "orientation":euler_angles_to_quat(np.array([0.,0.,0.])),
+            "scale":np.array([1.4,0.6,1.])*0.01,
+        }
+config_list.append(RigidConfig)
+RigidConfig={
+            "path":BOOK_STOP,
+            "position":np.array([-0.04272, 0.17297, 0.87243]),
+            "orientation":euler_angles_to_quat(np.array([0.5*np.pi,0.,0.])),
+            "scale":np.array([1.,1.,0.3])*0.01,
+        }
+config_list.append(RigidConfig)

@@ -22,7 +22,7 @@ class Robot:
     def initialize(self):
         for i in range(self.robot_num):
             self._robot[i].initialize()
-            self._robot[i].close()
+            self._robot[i].open()
     
     
     def load_robot(self):
@@ -43,10 +43,12 @@ class Robot:
     def get_current_position(self,index):
         return self._robot[index].get_current_position()
 
-    def open(self):
+    def open(self,flag_list):
         for i in range(self.robot_config.num):
-            self._robot[i].open()
+            if flag_list[i] == True:
+                self._robot[i].open()
     
-    def close(self):
+    def close(self,flag_list):
         for i in range(self.robot_config.num):
-            self._robot[i].close()
+            if flag_list[i] == True:
+                self._robot[i].close()
