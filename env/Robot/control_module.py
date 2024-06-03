@@ -335,7 +335,7 @@ class DynamicsModule:
             self.push_goto(gripper_pose)
 
         self.trajectory=torch.cat(self.trajectory,dim=0).cpu().numpy()
-        np.savetxt("/home/sim/diffusion_stow_v2/traj.txt",self.trajectory)
+        np.savetxt("/home/sim/stow_diffusion/traj.txt",self.trajectory)
 
             
         for i in range(10000000):
