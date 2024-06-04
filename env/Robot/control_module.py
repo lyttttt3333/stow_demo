@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 from env.config.PATH import *
+from env.config.command import *
 from omni.isaac.kit import SimulationApp
 from omni.isaac.core import World, SimulationContext, PhysicsContext
 from omni.isaac.core.utils.types import ArticulationAction
@@ -18,7 +19,7 @@ from omni.physx.scripts import physicsUtils, deformableUtils, particleUtils
 from omni.isaac.franka.controllers.rmpflow_controller import RMPFlowController
 from omni.isaac.core.utils.rotations import euler_angles_to_quat,quat_to_euler_angles
 from omni.isaac.sensor import Camera
-from omni.isaac.core.objects import DynamicCuboid, FixedCuboid
+from omni.isaac.core.objects import DynamicCuboid, FixedCuboid, VisualCuboid
 
 
 class trajectory_transformer():
@@ -130,6 +131,28 @@ class DynamicsModule:
         self.pusher._rigid_prim_view.disable_gravities()
         self.world.scene.add(self.pusher)
 
+        self.gripper=Rigid(f"/World/gripper",dynamic_rigid,f"gripper")
+        self.world.scene.add(self.gripper.rigid_prim)
+        self.gripper.rigid_prim._rigid_prim_view.disable_gravities()
+        self.gripper.rigid_prim.set_mass(mass=1e0)
+
+        self.aid = VisualCuboid(prim_path="/World/traj", color=np.array([0.,0.,1.0]),
+                            position=np.array([0.,0.,0.]), 
+                            orientation=None,
+                            scale=np.array([0.02, 0.02, 0.02]))
+        self.camera = Camera(
+            prim_path="/World/camera",
+            position=torch.tensor([0, 0, 9]),
+            orientation = [1, 0, 0, 0],
+            frequency=20,
+            resolution=(512, 512),
+        )
+        self.camera.initialize()
+        self.camera.add_semantic_segmentation_to_frame()
+        self.camera.add_pointcloud_to_frame(include_unlabelled=True)
+        self.camera.add_distance_to_image_plane_to_frame()
+
+
     def register_default_object(self):
         self.objects=[]
         for i in range(self.robot_num):
@@ -165,6 +188,10 @@ class DynamicsModule:
             raise ValueError("No method about rigid currently")
         else:
             raise ValueError("Type must be in rigid or garment")
+
+
+    def add_target(self,prim:DynamicCuboid):
+        self.target=prim
 
     def create_collsion_group(self):
         robot_group_list=[]
@@ -209,14 +236,14 @@ class DynamicsModule:
         for i in range(self.robot_num):
             collectionAPI_robot = Usd.CollectionAPI.Apply(filter_robot_list[i].GetPrim(), "colliders")
             collectionAPI_robot.CreateIncludesRel().AddTarget(f"/World/franka_{i}")
-            collectionAPI_robot.CreateIncludesRel().AddTarget(f"/World/Target")
             collectionAPI_attach = Usd.CollectionAPI.Apply(filter_attach_list[i].GetPrim(), "colliders")
-            collectionAPI_attach.CreateIncludesRel().AddTarget(f"/World/attach/attach_{i}")
+            collectionAPI_attach.CreateIncludesRel().AddTarget(f"/World/gripper")
         collectionAPI_garment = Usd.CollectionAPI.Apply(filter_garment.GetPrim(), "colliders")
         collectionAPI_garment.CreateIncludesRel().AddTarget("/World/Garment")
         collectionAPI_rigid = Usd.CollectionAPI.Apply(filter_rigid.GetPrim(), "colliders")
         collectionAPI_rigid.CreateIncludesRel().AddTarget("/World/Rigid_0")
         collectionAPI_rigid.CreateIncludesRel().AddTarget("/World/Rigid_1")
+        collectionAPI_rigid.CreateIncludesRel().AddTarget("/World/extend")
         if True:
             collectionAPI_rigid.CreateIncludesRel().AddTarget("/World/BOOK_0")
             collectionAPI_rigid.CreateIncludesRel().AddTarget("/World/BOOK_1")
@@ -227,6 +254,8 @@ class DynamicsModule:
     def warmup(self):
         self.world.reset()
         self.robot.initialize()
+        self.camera.initialize()
+        self.camera.post_reset()
         self.pre_place([True]*self.robot_num)
         ep=EpisodeConfig(contain_task=False,length=10)
         self.sub_episode(ep)
@@ -267,47 +296,160 @@ class DynamicsModule:
         )
         vector=torch.mm(vector.unsqueeze(0),R.transpose(1,0))
         return vector.squeeze(0)
+
         
 
     def simulation(self,params:EpisodeConfig):
         length=params.length
         self.start()
         self.trajectory=[]
-        for i in range(0):
+        for i in range(5):
             self.world.step(render=True)
 
+
+        motion_unit=PUSH0
+        sub_wp_num=5
+        while self.check_error_gripper(motion_unit[2],[0]):
+            gripper_pose, gripper_orientation=self.move_follow_gripper(motion_unit[2],
+                                        cmd_list=["gripper_goto_block"],
+                                        pair=[0],ori=motion_unit[-1])
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.aid.set_world_pose(position=gripper_pose[0])
+            self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
+        for i in range(sub_wp_num+1):
+            way_point=motion_unit[0]*(1-i/sub_wp_num) + motion_unit[1]*(i/sub_wp_num)
+            while self.check_error_gripper(way_point,[0]):
+                gripper_pose, gripper_orientation=self.move_follow_gripper(way_point,
+                                            cmd_list=["gripper_goto_block"],
+                                            pair=[0],ori=motion_unit[-1])
+                self.gripper_goto(gripper_pose)
+                gripper_pose = gripper_pose.cpu().unsqueeze(0)
+                gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+                self.aid.set_world_pose(position=gripper_pose[0])
+                self.gripper.rigid_prim._rigid_prim_view.set_world_poses(orientations=gripper_orientation)
+        self.gripper_goto(gripper_pose,force=True)
+        while self.check_error_gripper(motion_unit[3],[0]):
+            gripper_pose, gripper_orientation=self.move_follow_gripper(motion_unit[3],
+                                        cmd_list=["gripper_goto_block"],
+                                        pair=[0],ori=motion_unit[-1])
+            
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.aid.set_world_pose(position=gripper_pose[0])
+            self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
+
+        self.goback()
+
+
+        motion_unit=PUSH1
+
+        while self.check_error_gripper(motion_unit[2],[0]):
+            gripper_pose, gripper_orientation=self.move_follow_gripper(motion_unit[2],
+                                        cmd_list=["gripper_goto_block"],
+                                        pair=[0],ori=motion_unit[-1])
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.aid.set_world_pose(position=gripper_pose[0])
+            self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
+        for i in range(sub_wp_num+1):
+            way_point=motion_unit[0]*(1-i/sub_wp_num) + motion_unit[1]*(i/sub_wp_num)
+            while self.check_error_gripper(way_point,[0]):
+                gripper_pose, gripper_orientation=self.move_follow_gripper(way_point,
+                                            cmd_list=["gripper_goto_block"],
+                                            pair=[0],ori=motion_unit[-1])
+                gripper_pose = gripper_pose.cpu().unsqueeze(0)
+                gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+                self.aid.set_world_pose(position=gripper_pose[0])
+                self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
+        self.gripper_goto(gripper_pose,force=True)
+        while self.check_error_gripper(motion_unit[3],[0]):
+            gripper_pose, gripper_orientation=self.move_follow_gripper(motion_unit[3],
+                                        cmd_list=["gripper_goto_block"],
+                                        pair=[0],ori=motion_unit[-1])
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.aid.set_world_pose(position=gripper_pose[0])
+            self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
+
+
+        
+        self.goback()
+
+        motion_unit=PUSH2
+
+        while self.check_error_gripper(motion_unit[2],[0]):
+            gripper_pose, gripper_orientation=self.move_follow_gripper(motion_unit[2],
+                                        cmd_list=["gripper_goto_block"],
+                                        pair=[0],ori=motion_unit[-1])
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.aid.set_world_pose(position=gripper_pose[0])
+            self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
+        for i in range(sub_wp_num+1):
+            way_point=motion_unit[0]*(1-i/sub_wp_num) + motion_unit[1]*(i/sub_wp_num)
+            while self.check_error_gripper(way_point,[0]):
+                gripper_pose, gripper_orientation=self.move_follow_gripper(way_point,
+                                            cmd_list=["gripper_goto_block"],
+                                            pair=[0],ori=motion_unit[-1])
+                gripper_pose = gripper_pose.cpu().unsqueeze(0)
+                gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+                self.aid.set_world_pose(position=gripper_pose[0])
+                self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
+        self.gripper_goto(gripper_pose,force=True)
+        while self.check_error_gripper(motion_unit[3],[0]):
+            gripper_pose, gripper_orientation=self.move_follow_gripper(motion_unit[3],
+                                        cmd_list=["gripper_goto_block"],
+                                        pair=[0],ori=motion_unit[-1])
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.aid.set_world_pose(position=gripper_pose[0])
+            self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
+
+        self.target._rigid_prim_view.disable_gravities()
+        
         self.pre_place([True])
-        position=torch.tensor([[-0.45065,0.64568,0.79554]])
+        position=torch.tensor([[-0.47735,0.56337,0.7929]])
         ori=np.array([-0.50336,0.51135,-0.48358,0.50129])
         while self.check_error_gripper(position,[0]):
-            gripper_pose=self.move_follow_gripper(position,
+            gripper_pose, gripper_orientation=self.move_follow_gripper(position,
                                         cmd_list=["gripper_goto_block"],
                                         pair=[0],ori=ori)
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.aid.set_world_pose(position=gripper_pose[0])
 
-        position=torch.tensor([[-0.35065,0.64568,0.79554]])
+        self.test()
+
+
+        position=torch.tensor([[-0.27735,0.56337,0.7929]])
         ori=np.array([-0.50336,0.51135,-0.48358,0.50129])
         while self.check_error_gripper(position,[0]):
-            gripper_pose=self.move_follow_gripper(position,
+            gripper_pose, gripper_orientation=self.move_follow_gripper(position,
                                         cmd_list=["gripper_goto_block"],
                                         pair=[0],
                                         ori=ori)
             self.trajectory.append(gripper_pose.unsqueeze(0))
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.aid.set_world_pose(position=gripper_pose[0])
+            
 
         self.pre_pick([True,True,True])
         position=torch.tensor([[-0.35065,0.64568,0.89554]])
         ori=np.array([-0.50336,0.51135,-0.48358,0.50129])
         while self.check_error_gripper(position,[0]):
-            gripper_pose=self.move_follow_gripper(position,
+            gripper_pose, gripper_orientation=self.move_follow_gripper(position,
                                         cmd_list=["gripper_goto_block"],
                                         pair=[0],
                                         ori=ori)
             self.trajectory.append(gripper_pose.unsqueeze(0))
 
 
-        position=torch.tensor([[-0.06675,0.5,0.93929]])
+        position=torch.tensor([[-0.06675,0.52,0.93929]])
         ori=np.array([0.707,0.0,0.707,0.0])
         while self.check_error_gripper(position,[0]):
-            gripper_pose=self.move_follow_gripper(position,
+            gripper_pose, gripper_orientation=self.move_follow_gripper(position,
                                         cmd_list=["gripper_goto_block"],
                                         pair=[0],
                                         ori=ori)
@@ -317,7 +459,7 @@ class DynamicsModule:
         position=torch.tensor([[-0.06675,0.4,0.93929]])
         ori=np.array([0.707,0.0,0.707,0.0])
         while self.check_error_gripper(position,[0]):
-            gripper_pose=self.move_follow_gripper(position,
+            gripper_pose, gripper_orientation=self.move_follow_gripper(position,
                                         cmd_list=["gripper_goto_block"],
                                         pair=[0],
                                         ori=ori)
@@ -327,7 +469,7 @@ class DynamicsModule:
         position=torch.tensor([[-0.06675,0.3,0.93929]])
         ori=np.array([0.707,0.0,0.707,0.0])
         while self.check_error_gripper(position,[0]):
-            gripper_pose=self.move_follow_gripper(position,
+            gripper_pose, gripper_orientation=self.move_follow_gripper(position,
                                         cmd_list=["gripper_goto_block"],
                                         pair=[0],
                                         ori=ori)
@@ -355,9 +497,34 @@ class DynamicsModule:
         cmd=torch.cat([target_vel,orientation_ped],dim=-1)
         self.pusher._rigid_prim_view.set_velocities(cmd)
 
+    def gripper_goto(self,target_position,force=False):
+        if force == False:
+            pusher_pose,_=self.gripper.rigid_prim._rigid_prim_view.get_world_poses()
+            pusher_pose=pusher_pose.cpu()
+            target_position=target_position.cpu().unsqueeze(0)
+            target_position[:,1]=target_position[:,1]
+            target_vel=(target_position-pusher_pose)/self.sim_dt
+            orientation_ped=torch.zeros_like(target_vel)
+            cmd=torch.cat([target_vel,orientation_ped],dim=-1)
+            self.gripper.rigid_prim._rigid_prim_view.set_velocities(cmd)
+        else:
+            cmd= torch.zeros([1,6])
+            self.gripper.rigid_prim._rigid_prim_view.set_velocities(cmd)
+        
+
+    def goback(self):
+        way_point=INIT_POSITION
+        while self.check_error_gripper(way_point,[0],th=7e-3):
+            gripper_pose, gripper_orientation=self.move_follow_gripper(way_point,
+                                        cmd_list=["gripper_goto_block"],
+                                        pair=[0],ori=None)
+            gripper_pose = gripper_pose.cpu().unsqueeze(0)
+            gripper_orientation = gripper_orientation.cpu().unsqueeze(0)
+            self.gripper.rigid_prim._rigid_prim_view.set_world_poses(positions=gripper_pose,orientations=gripper_orientation)
 
 
     def move_follow_gripper(self,next_position_mat,cmd_list,pair=[0,1,2],rest=False,ori=None):
+        next_position_mat=next_position_mat.cpu()
         for i in range(self.block_num):
             cmd = cmd_list[i]
             if cmd == "block_follow_gripper":
@@ -404,9 +571,10 @@ class DynamicsModule:
                 cmd=torch.cat([target_vel,orientation_ped],dim=-1)
                 self.move_block_list[i].set_velocities(cmd*0)
         self.world.step(render=True)
-        return gripper_position
+        return gripper_position, gripper_orientation
 
-    def check_error_gripper(self,target_position, moving_index):
+    def check_error_gripper(self,target_position, moving_index, th=7e-4):
+        target_position=target_position.cpu()
         import torch.nn.functional as F
         error_list=[]
         for i in range(self.block_num):
@@ -419,7 +587,8 @@ class DynamicsModule:
             else:
                 pass
         max_error=max(error_list)
-        if max_error >=7e-4:
+        print(gripper_position)
+        if max_error >=th:
             return True
         else:
             return False
@@ -454,5 +623,25 @@ class DynamicsModule:
     def start(self):
         self.robot.initialize()
 
+
+    def test(self):
+        point=self.camera.get_current_frame()['pointcloud']["data"]
+        path="/home/sim/stow_diffusion/points.txt"
+        np.savetxt(path,point)
+
+    def add_color(self,input, white):
+        if white:
+            color = np.ones_like(input)*255 
+	
+        else:
+            n = input.shape[1]
+            ratios = np.linspace(0, 1, n)    
+            red_channel = np.round(ratios * 255).astype(np.uint8)  
+            green_channel = np.zeros(n, dtype=np.uint8)  
+            blue_channel = np.round((1 - ratios) * 255).astype(np.uint8)  
+            color = np.dstack((red_channel, green_channel, blue_channel)).reshape(n, 3)[None,:,:]
+            color = color.repeat(axis=0,repeats=input.shape[0])
+        return np.concatenate([input, color], axis=-1)
+            
 
 

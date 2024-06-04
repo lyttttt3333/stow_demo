@@ -36,3 +36,5 @@ BOOK1="omniverse://localhost/NVIDIA/Assets/ArchVis/Residential/Decor/Books/Book_
 BOOK2="omniverse://localhost/NVIDIA/Assets/ArchVis/Residential/Decor/Books/Book_Spelling.usd"
 BOOK3="omniverse://localhost/NVIDIA/Assets/ArchVis/Residential/Decor/Books/OmniConnect2016.usd"
 BOOK4="omniverse://localhost/NVIDIA/Assets/ArchVis/Residential/Decor/Books/PhotoAlbum_Closed.usd"
+
+GRIPPER = "omniverse://localhost/Users/sim/gripper_stow.usd"

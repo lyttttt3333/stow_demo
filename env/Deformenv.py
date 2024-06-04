@@ -14,6 +14,7 @@ from omni.isaac.quadruped.controllers import A1QPController
 from env.Robot.Robot import Robot
 from env.config.config import *
 from env.config.PATH import *
+from env.config.command import *
 from env.utils.isaac_utils import add_workspace
 from env.Robot.control_module import *
 from env.mesh.garment.garment import Garment, Rigid, WayPoint, Human, Deformable, Collider
@@ -27,6 +28,7 @@ from omni.isaac.franka.controllers.rmpflow_controller import RMPFlowController
 from omni.isaac.core.utils.rotations import euler_angles_to_quat,quat_to_euler_angles
 from omni.isaac.sensor import Camera
 from omni.isaac.core.objects import DynamicCuboid, FixedCuboid
+from omni.isaac.core.utils.prims import delete_prim
 
 
 
@@ -55,19 +57,32 @@ class BaseEnv:
         for idx, config in enumerate(book_list):
             self.rigid=Rigid(f"/World/BOOK_{idx}",config,f"book_{idx}")
 
+
         self.dynamcis=DynamicsModule(self.world,robot_initial_position=self.config.robot_config.position,robot_num=self.robot_num,real_robot=real_robot,load_scene=load_scene)
 
         self.dynamcis.create_collsion_group()
 
-        prim = DynamicCuboid(prim_path="/World/Target", color=np.array([1.0, 1.0, 1.0]),
+        
+
+        self.prim = DynamicCuboid(prim_path="/World/Target", color=np.array([1.0, 1.0, 1.0]),
                 name="target",
-                position=np.array([-0.32862,0.57002,0.79554]),
+                position=np.array([-0.31555,0.38646,0.79554]),
                 scale=np.array([0.12984, 0.18875, 0.01501]),
+                orientation=euler_angles_to_quat(np.array([0.,0.,0.15*np.pi])),
                 mass=None,
                 visible=True)
-        prim._rigid_prim_view.disable_gravities()
+        self.dynamcis.add_target(prim=self.prim)
+        self.world.scene.add(self.prim)
+        #prim._rigid_prim_view.disable_gravities()
         self.physics_material=PhysicsMaterial(prim_path="/World/Target/mate", dynamic_friction=1.99,static_friction=1.99)
         #prim.apply_physics_material(self.physics_material)
+        if False:
+            self.extend= FixedCuboid(prim_path="/World/extend", color=np.array([1.0, 1.0, 1.0]),
+                    name="extend",
+                    position=np.array([-0.06528,0.53982,0.77102]),
+                    scale=np.array([0.73048, 0.18875, 0.01501]),
+                    orientation=euler_angles_to_quat(np.array([0.,0.,0.0])),
+                    visible=True)
 
     def warmup(self):
         self.dynamcis.warmup()

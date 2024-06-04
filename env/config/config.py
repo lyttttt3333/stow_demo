@@ -123,8 +123,8 @@ config_list=[]
 RigidConfig={
             "path":DESK,
             "position":np.array([0., 0.03477, 0.]),
-            "orientation":euler_angles_to_quat(np.array([0.,0.,0.])),
-            "scale":np.array([1.4,0.6,1.])*0.01,
+            "orientation":euler_angles_to_quat(np.array([0.,0.,0.5*np.pi])),
+            "scale":np.array([1.6,0.45,1.])*0.01,
         }
 config_list.append(RigidConfig)
 RigidConfig={
@@ -134,3 +134,13 @@ RigidConfig={
             "scale":np.array([1.,1.,0.3])*0.01,
         }
 config_list.append(RigidConfig)
+
+
+dynamic_rigid={
+            "path":GRIPPER,
+            "position":np.array([0.5, 0.5, 0.5]),
+            "orientation":np.array([0.,0.,0.]),
+            "scale":np.array([100.,100.,100.]),
+        }
+
+

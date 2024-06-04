@@ -376,11 +376,13 @@ class WayPoint():
             if i == 0:
                 position=np.array([-0.62169,0,0])
             if i == 1:
-                position=np.array([-0.35065,0.64568,0.77554])
+                position=np.array([-0.18473,0.00265,0.88438])
             if i == 2:
                 position=np.array([1.76565  , -0.38631, 1.40685 ])
 
-            orientation=None if i !=0 else np.array([ 2.4701300e-04,  7.7067256e-01, -6.3723123e-01,  2.9873947e-04])
+            orientation=np.array([0.0063, 0.9213, 0.0260, 0.3879])
+
+            
             
             prim_start = VisualCuboid(prim_path=path_start, color=color,
                                 position=position, 
